@@ -21,6 +21,29 @@
 > [!NOTE]
 > 需勾选 `com.android.se` 并重启手机 (或执行 `su -c killall com.android.se`)
 
+## 构建
+
+本地构建：
+
+```bash
+./gradlew assembleRelease
+```
+
+未设置签名环境变量时输出未签名 APK；设置以下变量后自动签名：
+
+- `SIGNING_KEYSTORE_FILE`
+- `SIGNING_STORE_PASSWORD`
+- `SIGNING_KEY_ALIAS`
+- `SIGNING_KEY_PASSWORD`
+
+GitHub Actions（`.github/workflows/build-release.yml`）：
+
+- 推送 `v*` 标签：构建、校验签名并发布 GitHub Release
+- 手动 `workflow_dispatch`：只构建并上传 artifact，不发布 Release
+- 签名材料存放在仓库 Secrets：`SIGNING_KEYSTORE_BASE64`、`SIGNING_STORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD`
+
+发布新版本前先把 `app/build.gradle` 里的 `versionCode` / `versionName` 改好，再打 tag。
+
 ## 捐赠
 如果您喜欢这个项目，可以向以下地址捐赠：
 
