@@ -10,6 +10,7 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.telephony.TelephonyManager;
 import android.telephony.euicc.DownloadableSubscription;
@@ -33,7 +34,10 @@ public class HookEuicc extends XposedModule {
     private static final String NLPA_PACKAGE_FLAVOR = "ee.nekoko.nlpa.flavor1";
     private static final String GMS_ESIM_SETUP_HOST = "esimsetup.android.com";
 
+    private static final long SHARE_COOLDOWN_MS = 3000;
+
     private static String initActivationCode = "";
+    private static long lastShareTime = 0;
     private static Activity activity;
 
     @Override
@@ -60,6 +64,16 @@ public class HookEuicc extends XposedModule {
                 .intercept(chain -> {
                     activity = (Activity) chain.getThisObject();
                     captureGmsEsimSetup(activity);
+                    return chain.proceed();
+                });
+
+        // Activity 复用（singleTop）时只会回调 onNewIntent
+        Method activityOnNewIntent =
+                Activity.class.getDeclaredMethod("onNewIntent", Intent.class);
+        hook(activityOnNewIntent)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    captureGmsEsimIntent((Intent) chain.getArg(0));
                     return chain.proceed();
                 });
 
@@ -211,16 +225,20 @@ public class HookEuicc extends XposedModule {
             clipboardManager.setPrimaryClip(clipData);
         }
 
-        // 避免重复发送相同激活码
-        if (!activationCode.equals(initActivationCode)) {
+        // 相同激活码短时间只处理一次，冷却后允许再次拉起（便于重试）
+        if (!activationCode.equals(initActivationCode)
+                || SystemClock.elapsedRealtime() - lastShareTime > SHARE_COOLDOWN_MS) {
             initActivationCode = activationCode;
+            lastShareTime = SystemClock.elapsedRealtime();
 
             // 优先直接交给 NekokoLPA2 安装
             if (launchNlpa(context, activationCode)) {
+                Log.i(TAG, "handed activation code to NekokoLPA2");
                 showToast(context, "已发送到 NekokoLPA2\neSIM激活码：" + activationCode);
                 return;
             }
 
+            Log.w(TAG, "NekokoLPA2 unavailable, falling back to share");
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType("text/plain");
             shareIntent.putExtra(Intent.EXTRA_TEXT, activationCode);
@@ -263,8 +281,11 @@ public class HookEuicc extends XposedModule {
      * 需要把 com.google.android.gms 加入模块作用域。
      */
     private void captureGmsEsimSetup(Activity currentActivity) {
+        captureGmsEsimIntent(currentActivity.getIntent());
+    }
+
+    private void captureGmsEsimIntent(Intent intent) {
         try {
-            Intent intent = currentActivity.getIntent();
             Uri data = intent != null ? intent.getData() : null;
 
             if (data == null || !GMS_ESIM_SETUP_HOST.equals(data.getHost())) {
