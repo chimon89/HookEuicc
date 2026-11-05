@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.telephony.TelephonyManager;
@@ -28,6 +29,8 @@ public class HookEuicc extends XposedModule {
 
     private static final String TAG = "HookEUICC";
     private static final String TITLE = "eSIM激活码";
+    private static final String NLPA_PACKAGE = "ee.nekoko.nlpa";
+    private static final String NLPA_PACKAGE_FLAVOR = "ee.nekoko.nlpa.flavor1";
 
     private static String initActivationCode = "";
     private static Activity activity;
@@ -210,6 +213,12 @@ public class HookEuicc extends XposedModule {
         if (!activationCode.equals(initActivationCode)) {
             initActivationCode = activationCode;
 
+            // 优先直接交给 NekokoLPA2 安装
+            if (launchNlpa(context, activationCode)) {
+                showToast(context, "已发送到 NekokoLPA2\neSIM激活码：" + activationCode);
+                return;
+            }
+
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType("text/plain");
             shareIntent.putExtra(Intent.EXTRA_TEXT, activationCode);
@@ -240,6 +249,42 @@ public class HookEuicc extends XposedModule {
                             Toast.LENGTH_LONG
                     ).show();
                 }
+            }
+        }
+    }
+
+    /**
+     * 把激活码直接交给 NekokoLPA2 处理。
+     *
+     * <p>使用 lpa: 深链，激活码必须保持原样（不能 URL 编码），否则 NekokoLPA2 无法识别，
+     * 会把整条 URI 当成激活码显示。
+     *
+     * @return 是否成功拉起 NekokoLPA2
+     */
+    private boolean launchNlpa(Context context, String activationCode) {
+        String[] packages = {NLPA_PACKAGE, NLPA_PACKAGE_FLAVOR};
+
+        for (String packageName : packages) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("lpa:" + activationCode));
+                intent.setPackage(packageName);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+                return true;
+            } catch (Exception ignored) {
+                // 未安装该包，继续尝试下一个
+            }
+        }
+
+        return false;
+    }
+
+    private void showToast(Context context, String text) {
+        try {
+            Toast.makeText(context, text, Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            if (activity != null) {
+                Toast.makeText(activity, text, Toast.LENGTH_LONG).show();
             }
         }
     }

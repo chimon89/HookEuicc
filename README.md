@@ -1,7 +1,17 @@
 # HookEuicc
 解除某些软件对eSIM的要求，也可用于获取eSIM代码
 
-在某些不直接提供eSIM激活码的应用，将会复制激活码到剪切板
+在某些不直接提供eSIM激活码的应用，捕获到激活码后会优先交给 NekokoLPA2 直接安装；
+未安装 NekokoLPA2 时，仍会复制到剪切板并弹出分享面板。
+
+## 配合 NekokoLPA2 安装
+
+- 支持 `ee.nekoko.nlpa` 与 `ee.nekoko.nlpa.flavor1` 两个包名
+- 通过 `lpa:<激活码>` 深链拉起 NekokoLPA2 的安装流程
+- 激活码必须保持原样，不能做 URL 编码：编码后 `$` 会变成 `%24`，NekokoLPA2 将无法识别，并把整条 URI 当成激活码显示
+- NekokoLPA2 会弹出一次「Install Now / Install Later」确认；确认后在当前选中的 eUICC 或读卡器上完成下载
+- 同一个激活码只触发一次，避免重复弹窗
+- 需要把目标应用加入模块作用域；从后台系统进程（如 `com.android.se`）启动会被 Android 10+ 的后台 Activity 限制拦截
 
 ## 其他功能
 
