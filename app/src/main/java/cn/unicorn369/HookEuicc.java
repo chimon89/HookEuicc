@@ -31,6 +31,7 @@ public class HookEuicc extends XposedModule {
     private static final String TITLE = "eSIM激活码";
     private static final String NLPA_PACKAGE = "ee.nekoko.nlpa";
     private static final String NLPA_PACKAGE_FLAVOR = "ee.nekoko.nlpa.flavor1";
+    private static final String GMS_ESIM_SETUP_HOST = "esimsetup.android.com";
 
     private static String initActivationCode = "";
     private static Activity activity;
@@ -58,6 +59,7 @@ public class HookEuicc extends XposedModule {
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                 .intercept(chain -> {
                     activity = (Activity) chain.getThisObject();
+                    captureGmsEsimSetup(activity);
                     return chain.proceed();
                 });
 
@@ -250,6 +252,31 @@ public class HookEuicc extends XposedModule {
                     ).show();
                 }
             }
+        }
+    }
+
+    /**
+     * 捕获 GMS 的 eSIM 自动安装链接。
+     *
+     * <p>Holafly 等应用会把 {@code https://esimsetup.android.com/esim_qrcode_provisioning?carddata=LPA:1$...}
+     * 交给 Google Play Services 的 EsimSetupProvisioningActivity，激活码 encoded 在 carddata 参数里。
+     * 需要把 com.google.android.gms 加入模块作用域。
+     */
+    private void captureGmsEsimSetup(Activity currentActivity) {
+        try {
+            Intent intent = currentActivity.getIntent();
+            Uri data = intent != null ? intent.getData() : null;
+
+            if (data == null || !GMS_ESIM_SETUP_HOST.equals(data.getHost())) {
+                return;
+            }
+
+            String cardData = data.getQueryParameter("carddata");
+            if (cardData != null && cardData.startsWith("LPA:")) {
+                shareCode(cardData);
+            }
+        } catch (Throwable ignored) {
+            // 不影响目标应用自身的启动流程
         }
     }
 

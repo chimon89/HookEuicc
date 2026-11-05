@@ -12,6 +12,8 @@
 - NekokoLPA2 会弹出一次「Install Now / Install Later」确认；确认后在当前选中的 eUICC 或读卡器上完成下载
 - 同一个激活码只触发一次，避免重复弹窗
 - 需要把目标应用加入模块作用域；从后台系统进程（如 `com.android.se`）启动会被 Android 10+ 的后台 Activity 限制拦截
+- 「自动安装」走 Google Play Services 时（如 Holafly），需把 `com.google.android.gms` 也加入作用域；模块会从 `https://esimsetup.android.com/esim_qrcode_provisioning?carddata=...` 的 Intent 中解析激活码
+- 「代码安装 / 扫码安装」只需勾选对应 App
 
 ## 其他功能
 
